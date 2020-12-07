@@ -16,13 +16,12 @@
 //! - [IETF: HTTP Range Requests](https://tools.ietf.org/html/rfc7233)
 
 mod accept_ranges;
-mod byte_content_range;
-mod byte_range;
-mod byte_ranges;
-mod unit;
+mod bytes;
+mod content_range;
+#[allow(clippy::module_inception)]
+mod range;
 
 pub use accept_ranges::AcceptRanges;
-pub use byte_content_range::ByteContentRange;
-pub use byte_range::ByteRange;
-pub use byte_ranges::ByteRanges;
-pub use unit::Unit;
+pub use bytes::{BytesContentRange, BytesRange, BytesRangeSet};
+pub use content_range::ContentRange;
+pub use range::Range;

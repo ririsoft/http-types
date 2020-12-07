@@ -1,10 +1,13 @@
-use crate::headers::{HeaderName, HeaderValue, Headers, ToHeaderValues, ACCEPT_RANGES};
-use crate::range::Unit;
+use crate::range::bytes;
+use crate::{
+    headers::{HeaderName, HeaderValue, Headers, ToHeaderValues, ACCEPT_RANGES},
+    Error,
+};
 
 use std::fmt::{self, Debug, Display};
 use std::option;
 
-/// HTTP Accept-Ranges
+/// HTTP Accept-Ranges response header.
 ///
 /// Accept-Ranges header indicates that the server supports
 /// range requests and specifies the unit to be used by
@@ -25,36 +28,16 @@ use std::option;
 /// ```
 /// # fn main() -> http_types::Result<()> {
 /// #
-/// use http_types::range::{Unit, AcceptRanges};
+/// use http_types::range::AcceptRanges;
 /// use http_types::Response;
 ///
-/// let accept_ranges = AcceptRanges::new(Unit::Bytes);
+/// let accept_ranges = AcceptRanges::Bytes;
 ///
 /// let mut res = Response::new(200);
 /// accept_ranges.apply(&mut res);
 ///
 /// let accept_ranges = AcceptRanges::from_headers(res)?.unwrap();
-/// assert_eq!(accept_ranges.unit(), &Some(Unit::Bytes));
-/// #
-/// # Ok(()) }
-/// ```
-///
-/// Other unit ranges:
-///
-/// ```
-/// # fn main() -> http_types::Result<()> {
-/// #
-/// use http_types::range::{Unit, AcceptRanges};
-/// use http_types::Response;
-///
-/// let custom_unit = Unit::from("my_custom_unit");
-/// let accept_ranges = AcceptRanges::new(custom_unit);
-///
-/// let mut res = Response::new(200);
-/// accept_ranges.apply(&mut res);
-///
-/// let accept_ranges = AcceptRanges::from_headers(res)?.unwrap();
-/// assert_eq!(accept_ranges.unit(), &Some(custom_type));
+/// assert_eq!(accept_ranges, AcceptRanges::Bytes);
 /// #
 /// # Ok(()) }
 /// ```
@@ -64,58 +47,31 @@ use std::option;
 /// ```
 /// # fn main() -> http_types::Result<()> {
 /// #
-/// use http_types::range::{Unit, AcceptRanges};
+/// use http_types::range::AcceptRanges;
 /// use http_types::Response;
 ///
-/// let accept_ranges = AcceptRanges::new(None);
+/// let accept_ranges = AcceptRanges::None;
 ///
 /// let mut res = Response::new(200);
 /// accept_ranges.apply(&mut res);
 ///
 /// let accept_ranges = AcceptRanges::from_headers(res)?.unwrap();
-/// assert_eq!(accept_ranges.unit(), &None);
+/// assert_eq!(accept_ranges, AcceptRanges::None);
 /// #
 /// # Ok(()) }
 /// ```
-#[derive(Default, Debug, Clone, Eq, PartialEq)]
-pub struct AcceptRanges {
-    unit: Option<Unit>,
+#[derive(Debug, Clone, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum AcceptRanges {
+    /// Accepts bytes based range requests.
+    Bytes,
+    /// Do not accept range requests.
+    None,
 }
 
 impl AcceptRanges {
-    const BYTES: &'static str = "bytes";
+    /// The "none" value used when range requests are not accepted.
     const NONE: &'static str = "none";
-
-    /// Create a new AcceptRange which does not accept range requests.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Create a new AcceptRange accepting `byte` unit.
-    pub fn with_bytes() -> Self {
-        AcceptRanges {
-            bytes: true,
-            ..Default::default()
-        }
-    }
-
-    /// Create a new AcceptRange accepting `byte` unit.
-    pub fn with_other(s: impl AsRef<str>) -> Self {
-        AcceptRanges {
-            other: Some(s.as_ref().to_owned()),
-            ..Default::default()
-        }
-    }
-
-    /// Returns true if AcceptRange accepts `byte` unit.
-    pub fn bytes(&self) -> bool {
-        self.bytes
-    }
-
-    /// Returns the supported unit if any.
-    pub fn other(&self) -> &Option<String> {
-        &self.other
-    }
 
     /// Create a new instance from headers.
     ///
@@ -134,12 +90,11 @@ impl AcceptRanges {
 
     /// Create an AcceptRanges from a string.
     pub(crate) fn from_str(s: &str) -> crate::Result<Self> {
-        let accept_range = match s {
-            Self::NONE => AcceptRanges::default(),
-            Self::BYTES => AcceptRanges::with_bytes(),
-            other => AcceptRanges::with_other(other),
-        };
-        Ok(accept_range)
+        match s {
+            Self::NONE => Ok(AcceptRanges::None),
+            bytes::ACCEPT_RANGE_VALUE => Ok(AcceptRanges::Bytes),
+            _ => Err(Error::new_adhoc("unknown Accept-Ranges header")),
+        }
     }
 
     /// Sets the `Accept-Ranges` header.
@@ -154,10 +109,9 @@ impl AcceptRanges {
 
     /// Get the `HeaderValue`.
     pub fn value(&self) -> HeaderValue {
-        let s = match self.other {
-            Some(ref other) => other.as_str(),
-            None if self.bytes => Self::BYTES,
-            None => Self::NONE,
+        let s = match self {
+            AcceptRanges::Bytes => bytes::ACCEPT_RANGE_VALUE,
+            AcceptRanges::None => AcceptRanges::NONE,
         };
         // SAFETY: the internal string is validated to be ASCII.
         unsafe { HeaderValue::from_bytes_unchecked(s.into()) }
@@ -166,12 +120,10 @@ impl AcceptRanges {
 
 impl Display for AcceptRanges {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = match self.other {
-            Some(ref other) => other.as_str(),
-            None if self.bytes => Self::BYTES,
-            None => Self::NONE,
-        };
-        write!(f, "{}", s)
+        match self {
+            AcceptRanges::Bytes => write!(f, "{}", bytes::ACCEPT_RANGE_VALUE),
+            AcceptRanges::None => write!(f, "{}", AcceptRanges::NONE),
+        }
     }
 }
 
@@ -195,10 +147,9 @@ mod tests {
         let mut headers = Headers::new();
         headers.insert(ACCEPT_RANGES, "none");
         let accept_ranges = AcceptRanges::from_headers(headers).unwrap().unwrap();
-        assert_eq!(accept_ranges.other(), &None);
-        assert_eq!(accept_ranges.bytes(), false);
+        assert_eq!(accept_ranges, AcceptRanges::None);
 
-        let accept_ranges = AcceptRanges::new();
+        let accept_ranges = AcceptRanges::None;
         let mut res = Response::new(200);
         accept_ranges.apply(&mut res);
 
@@ -213,31 +164,14 @@ mod tests {
         let mut headers = Headers::new();
         headers.insert(ACCEPT_RANGES, "bytes");
         let accept_ranges = AcceptRanges::from_headers(headers).unwrap().unwrap();
-        assert_eq!(accept_ranges.bytes(), true);
+        assert_eq!(accept_ranges, AcceptRanges::Bytes);
 
-        let accept_ranges = AcceptRanges::with_bytes();
+        let accept_ranges = AcceptRanges::Bytes;
         let mut res = Response::new(200);
         accept_ranges.apply(&mut res);
 
         let raw_header_value = res.header(ACCEPT_RANGES).unwrap();
         assert_eq!(raw_header_value, "bytes");
-
-        Ok(())
-    }
-
-    #[test]
-    fn accept_ranges_other() -> crate::Result<()> {
-        let mut headers = Headers::new();
-        headers.insert(ACCEPT_RANGES, "foo");
-        let accept_ranges = AcceptRanges::from_headers(headers).unwrap().unwrap();
-        assert_eq!(accept_ranges.other(), &Some("foo".into()));
-
-        let accept_ranges = AcceptRanges::with_other("foo");
-        let mut res = Response::new(200);
-        accept_ranges.apply(&mut res);
-
-        let raw_header_value = res.header(ACCEPT_RANGES).unwrap();
-        assert_eq!(raw_header_value, "foo");
 
         Ok(())
     }
