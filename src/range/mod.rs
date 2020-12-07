@@ -19,8 +19,10 @@ mod accept_ranges;
 mod byte_content_range;
 mod byte_range;
 mod byte_ranges;
+mod unit;
 
 pub use accept_ranges::AcceptRanges;
 pub use byte_content_range::ByteContentRange;
 pub use byte_range::ByteRange;
 pub use byte_ranges::ByteRanges;
+pub use unit::Unit;

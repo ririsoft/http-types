@@ -1,4 +1,5 @@
 use crate::headers::{HeaderName, HeaderValue, Headers, ToHeaderValues, ACCEPT_RANGES};
+use crate::range::Unit;
 
 use std::fmt::{self, Debug, Display};
 use std::option;
@@ -15,7 +16,7 @@ use std::option;
 ///
 /// - [RFC 7233, section 2.3: Accept-Ranges](https://tools.ietf.org/html/rfc7233#section-2.3)
 /// - [RFC 7233, section 2.1: Byte Ranges](https://tools.ietf.org/html/rfc7233#section-2.1)
-/// - [IANA HTTP parameters, range-units: HTTP Range Unit Registry](https://www.iana.org/assignments/http-parameters/http-parameters.xhtml#range-units)
+/// - [IANA HTTP parameters, range-units: HTTP Range Unit Registry](https://www.iana.org/assignments/http-parameters/http-parameters.xhtml)
 ///
 /// # Examples
 ///
@@ -24,16 +25,16 @@ use std::option;
 /// ```
 /// # fn main() -> http_types::Result<()> {
 /// #
-/// use http_types::range::AcceptRanges;
+/// use http_types::range::{Unit, AcceptRanges};
 /// use http_types::Response;
 ///
-/// let accept_ranges = AcceptRanges::with_bytes();
+/// let accept_ranges = AcceptRanges::new(Unit::Bytes);
 ///
 /// let mut res = Response::new(200);
 /// accept_ranges.apply(&mut res);
 ///
 /// let accept_ranges = AcceptRanges::from_headers(res)?.unwrap();
-/// assert_eq!(accept_ranges.bytes(), true);
+/// assert_eq!(accept_ranges.unit(), &Some(Unit::Bytes));
 /// #
 /// # Ok(()) }
 /// ```
@@ -43,17 +44,17 @@ use std::option;
 /// ```
 /// # fn main() -> http_types::Result<()> {
 /// #
-/// use http_types::range::AcceptRanges;
+/// use http_types::range::{Unit, AcceptRanges};
 /// use http_types::Response;
 ///
-/// let custom_type = String::from("my_custom_type");
-/// let accept_ranges = AcceptRanges::with_other(custom_type.clone());
+/// let custom_unit = Unit::from("my_custom_unit");
+/// let accept_ranges = AcceptRanges::new(custom_unit);
 ///
 /// let mut res = Response::new(200);
 /// accept_ranges.apply(&mut res);
 ///
 /// let accept_ranges = AcceptRanges::from_headers(res)?.unwrap();
-/// assert_eq!(accept_ranges.other(), &Some(custom_type));
+/// assert_eq!(accept_ranges.unit(), &Some(custom_type));
 /// #
 /// # Ok(()) }
 /// ```
@@ -63,24 +64,22 @@ use std::option;
 /// ```
 /// # fn main() -> http_types::Result<()> {
 /// #
-/// use http_types::range::AcceptRanges;
+/// use http_types::range::{Unit, AcceptRanges};
 /// use http_types::Response;
 ///
-/// let accept_ranges = AcceptRanges::new();
+/// let accept_ranges = AcceptRanges::new(None);
 ///
 /// let mut res = Response::new(200);
 /// accept_ranges.apply(&mut res);
 ///
 /// let accept_ranges = AcceptRanges::from_headers(res)?.unwrap();
-/// assert_eq!(accept_ranges.bytes(), false);
-/// assert_eq!(accept_ranges.other(), &None);
+/// assert_eq!(accept_ranges.unit(), &None);
 /// #
 /// # Ok(()) }
 /// ```
 #[derive(Default, Debug, Clone, Eq, PartialEq)]
 pub struct AcceptRanges {
-    bytes: bool,
-    other: Option<String>,
+    unit: Option<Unit>,
 }
 
 impl AcceptRanges {
